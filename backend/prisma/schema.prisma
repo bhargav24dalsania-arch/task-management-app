@@ -346,3 +346,13 @@ model RolePermission {
 
   @@unique([role, permission])
 }
+
+model AppState {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  state           Json
+  score           Int      @default(0)
+  clientUpdatedAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
