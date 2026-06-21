@@ -1,0 +1,348 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MASTER_ADMIN
+  ADMIN
+  SENIOR
+  REVIEWER
+  PREPARER
+}
+
+enum ClientType {
+  B2B
+  B2C
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROCESS
+  ON_HOLD
+  SENT_TO_REVIEWER
+  COMPLETED
+}
+
+enum TaskType {
+  STANDARD
+  RECURRING
+}
+
+enum TimeSource {
+  TIMER
+  MANUAL
+  EOD
+}
+
+enum TimerStatus {
+  RUNNING
+  STOPPED
+}
+
+enum PlanStatus {
+  SUBMITTED
+  REVIEWED
+  CLARIFICATION_REQUESTED
+}
+
+model Company {
+  id            String         @id @default(cuid())
+  name          String
+  code          String         @unique
+  startDate     DateTime       @default(now())
+  endDate       DateTime?
+  settings      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users         User[]
+  clients       Client[]
+  projects      Project[]
+  scopes        ScopeOfWork[]
+  tasks         Task[]
+  timeEntries   TimeEntry[]
+  timerSessions TimerSession[]
+  dayPlans      DayPlan[]
+  eodReports    EodReport[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  statusHistory StatusHistory[]
+}
+
+model User {
+  id                    String         @id @default(cuid())
+  companyId             String
+  company               Company        @relation(fields: [companyId], references: [id])
+  name                  String
+  email                 String         @unique
+  passwordHash          String
+  dateOfJoining         DateTime?
+  endDate               DateTime?
+  designation           String?
+  education             String?
+  role                  Role
+  managerId             String?
+  manager               User?          @relation("UserHierarchy", fields: [managerId], references: [id])
+  teamMembers           User[]         @relation("UserHierarchy")
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  managedClients        Client[]       @relation("ClientManager")
+  reviewedClients       Client[]       @relation("ClientReviewer")
+  preparedClients       Client[]       @relation("ClientPreparer")
+  assignedTasks         Task[]         @relation("TaskAssignee")
+  reviewTasks           Task[]         @relation("TaskReviewer")
+  createdTasks          Task[]         @relation("TaskCreator")
+  comments              TaskComment[]
+  timeEntries           TimeEntry[]
+  timerSessions         TimerSession[]
+  dayPlans              DayPlan[]
+  eodReports            EodReport[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  statusHistory         StatusHistory[]
+}
+
+model Client {
+  id          String        @id @default(cuid())
+  companyId   String
+  company     Company       @relation(fields: [companyId], references: [id])
+  name        String
+  type        ClientType
+  managerId   String
+  manager     User          @relation("ClientManager", fields: [managerId], references: [id])
+  reviewerId  String
+  reviewer    User          @relation("ClientReviewer", fields: [reviewerId], references: [id])
+  preparerId  String
+  preparer    User          @relation("ClientPreparer", fields: [preparerId], references: [id])
+  startDate   DateTime      @default(now())
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  projects    Project[]
+  scopes      ScopeOfWork[]
+  tasks       Task[]
+
+  @@unique([companyId, name])
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  clientId  String?
+  client    Client?   @relation(fields: [clientId], references: [id])
+  name      String
+  status    String
+  startDate DateTime @default(now())
+  endDate   DateTime?
+  dueDate   DateTime?
+  tasks     Task[]
+
+  @@unique([companyId, name])
+}
+
+model ScopeOfWork {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id])
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id])
+  title        String
+  description  String
+  deliverables String
+  priority     Priority
+  estimateHours Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tasks        Task[]
+
+  @@unique([clientId, title])
+}
+
+model Task {
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id])
+  projectId     String?
+  project       Project?      @relation(fields: [projectId], references: [id])
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  scopeId       String
+  scope         ScopeOfWork   @relation(fields: [scopeId], references: [id])
+  title         String
+  description   String
+  deliverables  String
+  priority      Priority
+  dueDate       DateTime
+  estimateHours Float
+  assigneeId    String
+  assignee      User          @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reviewerId    String
+  reviewer      User          @relation("TaskReviewer", fields: [reviewerId], references: [id])
+  createdById   String
+  createdBy     User          @relation("TaskCreator", fields: [createdById], references: [id])
+  status        TaskStatus    @default(NOT_STARTED)
+  type          TaskType      @default(STANDARD)
+  recurrenceRule String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  comments      TaskComment[]
+  timeEntries   TimeEntry[]
+  timerSessions TimerSession[]
+  statusHistory StatusHistory[]
+}
+
+model StatusHistory {
+  id             String      @id @default(cuid())
+  companyId      String
+  company        Company     @relation(fields: [companyId], references: [id])
+  taskId         String
+  task           Task        @relation(fields: [taskId], references: [id])
+  changedById    String?
+  changedBy      User?       @relation(fields: [changedById], references: [id])
+  previousStatus TaskStatus?
+  newStatus      TaskStatus
+  reason         String?
+  createdAt      DateTime    @default(now())
+}
+
+model TaskComment {
+  id                       String   @id @default(cuid())
+  taskId                   String
+  task                     Task     @relation(fields: [taskId], references: [id])
+  userId                   String
+  user                     User     @relation(fields: [userId], references: [id])
+  action                   String
+  reason                   String
+  text                     String
+  requiredCorrections      String?
+  expectedResubmissionDate DateTime?
+  createdAt                DateTime @default(now())
+}
+
+model TimeEntry {
+  id        String     @id @default(cuid())
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id])
+  taskId    String
+  task      Task       @relation(fields: [taskId], references: [id])
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  date      DateTime
+  hours     Float
+  note      String
+  source    TimeSource
+  createdAt DateTime   @default(now())
+}
+
+model TimerSession {
+  id             String      @id @default(cuid())
+  companyId      String
+  company        Company     @relation(fields: [companyId], references: [id])
+  taskId         String
+  task           Task        @relation(fields: [taskId], references: [id])
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  startedAt      DateTime    @default(now())
+  stoppedAt      DateTime?
+  elapsedSeconds Int         @default(0)
+  status         TimerStatus @default(RUNNING)
+  note           String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([companyId, userId, status])
+  @@index([taskId])
+}
+
+model DayPlan {
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id])
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  managerId     String?
+  date          DateTime
+  status        PlanStatus    @default(SUBMITTED)
+  remarks       String?
+  items         DayPlanItem[]
+  createdAt     DateTime      @default(now())
+}
+
+model DayPlanItem {
+  id            String      @id @default(cuid())
+  dayPlanId     String
+  dayPlan       DayPlan     @relation(fields: [dayPlanId], references: [id])
+  clientId      String
+  scopeId       String
+  priority      Priority
+  expectedHours Float
+  remarks       String?
+}
+
+model EodReport {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  managerId      String?
+  taskId         String
+  date           DateTime
+  actualHours    Float
+  completed      String
+  inProgress     String?
+  blockers       String?
+  pendingWork    String?
+  reason         String?
+  comments       String
+  createdAt      DateTime @default(now())
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  recipientId String
+  recipient   User     @relation(fields: [recipientId], references: [id])
+  category    String
+  title       String
+  message     String
+  entityType  String?
+  entityId    String?
+  priority    String   @default("Normal")
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  action        String
+  entity        String
+  previousValue String?
+  newValue      String?
+  createdAt     DateTime @default(now())
+}
+
+model RolePermission {
+  id         String   @id @default(cuid())
+  role       Role
+  permission String
+  createdAt  DateTime @default(now())
+
+  @@unique([role, permission])
+}
