@@ -2,6 +2,8 @@
 
 Production-ready full-stack version of the original local HTML task management prototype.
 
+The complete original TaskFlow HTML application is served by the Next.js frontend at `/task-manager.html`. The root URL redirects there so users get the full feature set first.
+
 ## Stack
 
 - Frontend: React with Next.js
@@ -62,6 +64,7 @@ npx prisma migrate deploy --schema backend/prisma/schema.prisma
 
 All API routes are available under `/api`.
 
+- `GET /api/state` and `POST /api/state` for the full legacy TaskFlow app state
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 - `/api/users`
@@ -83,6 +86,8 @@ All API routes are available under `/api`.
 Business data is stored permanently in PostgreSQL through Prisma. The frontend uses React state only after loading data from the backend. It does not store important business records in browser state, JavaScript variables, or local browser storage. The only browser storage used is the JWT token for session continuity.
 
 Database-backed modules include users, companies, clients, projects, scopes, tasks, recurring tasks, timer sessions, time logs, comments, status history, notifications, audit logs, roles, and permissions.
+
+For full parity with the original HTML application, the `AppState` table also stores the complete TaskFlow state JSON used by the HTML app. This keeps all previously built modules available while the module-by-module React conversion continues, including planner, day-end, HRMS, attendance, leave, comp-off, inbox, performance, checklist, advanced task board, audit filters, and timer widget behavior.
 
 ## Demo Login
 
@@ -118,9 +123,10 @@ npm run start
 ## Persistence Test
 
 1. Start PostgreSQL, backend, and frontend.
-2. Log in.
-3. Create a client, project, scope, task, timer entry, or user.
-4. Refresh the browser, close and reopen it, then log in again.
-5. Confirm the record is still visible.
+2. Open `http://localhost:3000/task-manager.html`.
+3. Log in.
+4. Create a client, project, scope, task, timer entry, HRMS record, inbox update, or user.
+5. Refresh the browser, close and reopen it, then log in again.
+6. Confirm the record is still visible.
 
 If a save fails, the frontend shows the backend error message and does not treat the record as saved.

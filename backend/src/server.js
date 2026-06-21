@@ -30,7 +30,7 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "25mb" }));
 
 app.use((req, res, next) => {
   if (req.url === "/api") req.url = "/";
@@ -227,6 +227,17 @@ async function notify(companyId, recipientId, category, title, message, entityTy
   });
 }
 
+const legacyStateKey = "taskflow-enterprise-v1";
+
+function stateResponse(record) {
+  return {
+    ok: true,
+    state: record?.state || null,
+    score: record?.score || 0,
+    updatedAt: record?.clientUpdatedAt?.toISOString() || record?.updatedAt?.toISOString() || null
+  };
+}
+
 function elapsedSeconds(startedAt, stoppedAt) {
   return Math.max(0, Math.round((stoppedAt.getTime() - new Date(startedAt).getTime()) / 1000));
 }
@@ -268,6 +279,38 @@ async function stopTimerSession(session, stoppedAt, note = "Timer stopped") {
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "taskflow-api" });
 });
+
+app.get("/state", asyncRoute(async (req, res) => {
+  const record = await prisma.appState.findUnique({ where: { key: legacyStateKey } });
+  res.json(stateResponse(record));
+}));
+
+app.post("/state", asyncRoute(async (req, res) => {
+  const body = z.object({
+    updatedAt: z.string().optional().nullable(),
+    score: z.coerce.number().optional().default(0),
+    state: z.record(z.any()).optional().nullable()
+  }).parse(req.body);
+
+  const clientUpdatedAt = body.updatedAt ? new Date(body.updatedAt) : new Date();
+  const safeScore = Math.max(0, Math.min(2147483647, Math.round(Number(body.score || 0))));
+  const record = await prisma.appState.upsert({
+    where: { key: legacyStateKey },
+    create: {
+      key: legacyStateKey,
+      state: body.state || {},
+      score: safeScore,
+      clientUpdatedAt
+    },
+    update: {
+      state: body.state || {},
+      score: safeScore,
+      clientUpdatedAt
+    }
+  });
+
+  res.json(stateResponse(record));
+}));
 
 app.post("/auth/login", asyncRoute(async (req, res) => {
   const body = z.object({ email: z.string().email(), password: z.string().min(1) }).parse(req.body);
